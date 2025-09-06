@@ -5,49 +5,64 @@ import datetime
 
 def spending_by_weekday(transactions: pd.DataFrame,
                         date: Optional[str] = None) -> pd.DataFrame:
-    """Функция возвращает средние траты в каждый из дней недели за последние три месяца"""
+    """
+    Функция возвращает средние траты в каждый из дней недели
+    за последние три месяца от указанной даты.
+    """
 
-    if date is None:
-        current_date = datetime.datetime.now().date()
-    else:
-        current_date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+    df = transactions.copy()
 
-    start_date = current_date - datetime.timedelta()
-
-    required_columns = ['Дата операции', 'Сумма операции']
-    missing_columns = [col for col in required_columns if col not in transactions.columns]
+    required_columns = ['Дата платежа', 'Сумма операции с округлением']
+    missing_columns = [col for col in required_columns if col not in df.columns]
 
     if missing_columns:
         raise ValueError(f"Отсутствуют необходимые колонки: {missing_columns}")
 
-    transactions_copy = transactions.copy()
-    transactions_copy['Дата операции'] = pd.to_datetime(transactions_copy['Дата операции'], errors='coerce')
+    df['Дата платежа'] = pd.to_datetime(
+        df['Дата платежа'],
+        format='%d.%m.%Y',
+        dayfirst=True,
+        errors='coerce'
+    )
 
-    mask = (transactions_copy['Дата операции'] >= pd.Timestamp(start_date)) & \
-           (transactions_copy['Дата операции'] <= pd.Timestamp(current_date))
-    recent_transactions = transactions_copy[mask].copy()
+    df = df.dropna(subset=['Дата платежа'])
 
-    recent_transactions = recent_transactions[recent_transactions['Сумма операции'] < 0].copy()
-
-    if recent_transactions.empty:
+    if len(df) == 0:
+        weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг',
+                    'Пятница', 'Суббота', 'Воскресенье']
         return pd.DataFrame({
-            'day_of_week': ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'],
-            'average_spending': [0.0] * 7
+            'День недели': weekdays,
+            'Средние траты': [0] * 7
         })
 
-    recent_transactions['day_of_week_num'] = recent_transactions['Дата операции'].dt.dayofweek
-    recent_transactions['day_of_week_name'] = recent_transactions['Дата операции'].dt.day_name('ru_RU')
+    if date is None:
+        end_date = df['Дата платежа'].max().date()
+    else:
+        end_date = datetime.datetime.strptime(date, "%d.%m.%Y").date()
+        max_data_date = df['Дата платежа'].max().date()
+        if end_date > max_data_date:
+            end_date = max_data_date
+            print(f"Предупреждение: переданная дата позже последней даты в данных. Используется {end_date}")
 
-    result = recent_transactions.groupby(['day_of_week_num', 'day_of_week_name'])['Сумма операции'].agg([
-        ('average_spending', 'mean'),
-        ('transaction_count', 'count')
-    ]).reset_index()
+    start_date = end_date - datetime.timedelta(days=90)
 
-    result = result.sort_values('day_of_week_num')
+    mask = (df['Дата платежа'].dt.date >= start_date) & (df['Дата платежа'].dt.date <= end_date)
+    df_filtered = df.loc[mask].copy()
 
-    result['average_spending'] = result['average_spending'].abs().round(2)
+    if len(df_filtered) == 0:
+        print("Нет данных за указанный период. Используем все доступные данные.")
+        df_filtered = df.copy()
 
-    days_map = {
+    df_filtered['День недели'] = df_filtered['Дата платежа'].dt.dayofweek
+
+    result = (df_filtered.groupby('День недели')['Сумма операции с округлением']
+              .mean()
+              .reset_index()
+              .rename(columns={'Сумма операции с округлением': 'Средние траты'}))
+
+    result['Средние траты'] = result['Средние траты'].round().astype(int)
+
+    weekdays_map = {
         0: 'Понедельник',
         1: 'Вторник',
         2: 'Среда',
@@ -57,13 +72,19 @@ def spending_by_weekday(transactions: pd.DataFrame,
         6: 'Воскресенье'
     }
 
-    full_week = pd.DataFrame({
-        'day_of_week_num': range(7),
-        'day_of_week_name': list(days_map.values())
-    })
+    result['День недели'] = result['День недели'].map(weekdays_map)
 
-    result = full_week.merge(result, on=['day_of_week_num', 'day_of_week_name'], how='left')
-    result['average_spending'] = result['average_spending'].fillna(0.0)
-    result['transaction_count'] = result['transaction_count'].fillna(0)
+    all_weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг',
+                    'Пятница', 'Суббота', 'Воскресенье']
 
-    return result[['day_of_week_name', 'average_spending', 'transaction_count']]
+    for weekday in all_weekdays:
+        if weekday not in result['День недели'].values:
+            result = pd.concat([result, pd.DataFrame({
+                'День недели': [weekday],
+                'Средние траты': [0]
+            })], ignore_index=True)
+
+    result['День недели'] = pd.Categorical(result['День недели'], categories=all_weekdays, ordered=True)
+    result = result.sort_values('День недели').reset_index(drop=True)
+
+    return result

@@ -1,4 +1,3 @@
-import json
 import datetime
 import logging
 from src.utils import greeting, currency_rates, stock_prices, cards, top_transactions
@@ -43,11 +42,3 @@ def main(input_datetime: str) -> dict:
         response["error"] = f"Внутренняя ошибка: {str(e)}"
 
     return response
-
-
-if __name__ == "__main__":
-    input_date_time = "2025-01-15 14:30:00"
-    result_json = main(input_date_time)
-
-    print(json.dumps(result_json, ensure_ascii=False, indent=2))
-

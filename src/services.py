@@ -5,7 +5,7 @@ import pandas as pd
 
 def person_transfers() -> list:
     """Функция возвращает JSON со всеми транзакциями-переводами физлицам"""
-    file_path = r'C:\Users\amajk\PycharmProjects\Krsovaya1\data\operations.xlsx'
+    file_path = r'/Users/avedyanav/PycharmProjects/Kyrsovaya1/data/operations.xlsx'
 
     try:
         df = pd.read_excel(file_path)
@@ -43,7 +43,4 @@ def person_transfers() -> list:
 
     except FileNotFoundError:
         logging.error(f"Файл {file_path} не найден")
-        return []
-    except Exception as e:
-        logging.error(f"Ошибка при чтении файла: {e}")
         return []
